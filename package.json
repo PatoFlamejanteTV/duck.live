@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "description": "",
   "scripts": {
-    "start": "FORCE_COLOR=1 node index.ts",
-    "dev": "nodemon index.ts"
+    "start": "FORCE_COLOR=1 node index.js",
+    "dev": "nodemon index.js"
   },
   "dependencies": {
     "colors": "1.4.0",
