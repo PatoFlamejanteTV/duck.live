@@ -1,3 +1,8 @@
+const debugLog = (message, opts) => {
+  if (opts.debug) {
+    console.log(`[DEBUG] ${message}`);
+  }
+};
 const fs = require('fs').promises;
 const path = require('path');
 const http = require('http');
@@ -60,6 +65,7 @@ const streamer = (stream, opts) => {
   const hideCursor = Buffer.from('\x1b[?25l');
   const showCursor = Buffer.from('\x1b[?25h');
 
+  debugLog('Initializing stream', opts);
   // Clear screen and hide cursor only once at the start
   stream.push(Buffer.from('\x1b[2J\x1b[3J\x1b[H'));
   stream.push(hideCursor);
@@ -68,21 +74,29 @@ const streamer = (stream, opts) => {
     stream.push(moveCursorToStart);
     stream.push(frames[index]);
     index = (index + 1) % frameCount;
+
+    if (opts.debug && index === 0) {
+      debugLog('Completed one full cycle of frames', opts);
+    }
   }, 100);
 
   return () => {
     clearInterval(interval);
     stream.push(showCursor);
+    debugLog('Stream ended', opts);
   };
 };
 
-const validateQuery = ({ flip }) => ({
+const validateQuery = ({ flip, debug }) => ({
   flip: String(flip).toLowerCase() === 'true',
+  debug: String(debug).toLowerCase() === 'true',
 });
 
 const server = http.createServer((req, res) => {
   const { pathname, query } = url.parse(req.url, true);
+  const opts = validateQuery(query);
 
+  debugLog(`Received request: ${req.url}`, opts);
   if (pathname === '/healthcheck') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end('{"status":"ok"}');
@@ -92,17 +106,30 @@ const server = http.createServer((req, res) => {
     req.headers['user-agent'] &&
     !req.headers['user-agent'].includes('curl')
   ) {
+    debugLog('Non-curl user agent detected, redirecting', opts);
     res.writeHead(302, {
       Location: 'https://github.com/PatoFlamejanteTV/duck.live',
     });
     return res.end();
   }
 
+  debugLog('Starting stream', opts);
   const stream = new Readable({ read() {} });
   stream.pipe(res);
-  const cleanup = streamer(stream, validateQuery(query));
+
+  if (opts.debug) {
+    res.write('Debug mode enabled. Streaming will begin shortly...\n');
+    res.write(`Flip: ${opts.flip}\n`);
+    res.write(
+      `Total frames: ${(opts.flip ? cachedFlipped : cachedOriginal).length}\n`
+    );
+    res.write('---\n');
+  }
+
+  const cleanup = streamer(stream, opts);
 
   req.on('close', () => {
+    debugLog('Request closed, cleaning up', opts);
     cleanup();
     stream.destroy();
   });
