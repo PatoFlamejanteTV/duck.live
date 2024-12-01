@@ -1,14 +1,14 @@
-const fs = require('mz/fs');
+const fs = require('fs').promises;
 const path = require('path');
 const http = require('http');
 const url = require('url');
 const { Readable } = require('stream');
-//const colors = require('colors/safe');
 
 // Setup frames in memory
 let original;
 let flipped;
 
+// Load frames asynchronously
 (async () => {
   const framesPath = 'frames';
   const files = await fs.readdir(framesPath);
@@ -19,49 +19,21 @@ let flipped;
       return frame.toString();
     })
   );
-  flipped = original.map((f) => {
-    return f.toString().split('').reverse().join('');
-  });
+  flipped = original.map((f) => f.split('').reverse().join(''));
 })().catch((err) => {
-  console.log('Error loading frames');
-  console.log(err);
+  console.error('Error loading frames:', err);
 });
-
-/*const colorsOptions = [
-  'red',
-  'yellow',
-  'green',
-  'blue',
-  'magenta',
-  'cyan',
-  'white'
-];*/
-//const numColors = colorsOptions.length;
-//const selectColor = previousColor => {
-//let color;
-
-/*do {
-    color = Math.floor(Math.random() * numColors);
-  } while (color === previousColor);
-
-  return color;
-};*/
 
 const streamer = (stream, opts) => {
   let index = 0;
-  let lastColor;
-  let frame = null;
   const frames = opts.flip ? flipped : original;
+  const frameCount = frames.length;
+  const clearScreen = Buffer.from('\x1b[2J\x1b[3J\x1b[H');
 
   return setInterval(() => {
-    // clear the screen
-    stream.push('\x1b[2J\x1b[3J\x1b[H'); // WORKS!11!
-
-    //const newColor = lastColor = selectColor(lastColor);
-
+    stream.push(clearScreen);
     stream.push(frames[index]);
-
-    index = (index + 1) % frames.length;
+    index = (index + 1) % frameCount;
   }, 100);
 };
 
@@ -70,13 +42,14 @@ const validateQuery = ({ flip }) => ({
 });
 
 const server = http.createServer((req, res) => {
-  if (req.url === '/healthcheck') {
+  const { pathname, query } = url.parse(req.url, true);
+
+  if (pathname === '/healthcheck') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    return res.end(JSON.stringify({ status: 'ok' }));
+    return res.end('{"status":"ok"}');
   }
 
   if (
-    req.headers &&
     req.headers['user-agent'] &&
     !req.headers['user-agent'].includes('curl')
   ) {
@@ -86,22 +59,17 @@ const server = http.createServer((req, res) => {
     return res.end();
   }
 
-  const stream = new Readable();
-  stream._read = function noop() {};
+  const stream = new Readable({ read() {} });
   stream.pipe(res);
-  const interval = streamer(
-    stream,
-    validateQuery(url.parse(req.url, true).query)
-  );
+  const interval = streamer(stream, validateQuery(query));
 
   req.on('close', () => {
-    stream.destroy();
     clearInterval(interval);
+    stream.destroy();
   });
 });
 
 const port = process.env.PARROT_PORT || 3000;
-server.listen(port, (err) => {
-  if (err) throw err;
+server.listen(port, () => {
   console.log(`Listening on localhost:${port}`);
 });
