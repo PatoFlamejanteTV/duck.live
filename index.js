@@ -13,17 +13,15 @@ let flipped;
   const framesPath = 'frames';
   const files = await fs.readdir(framesPath);
 
-  original = await Promise.all(files.map(async (file) => {
-    const frame = await fs.readFile(path.join(framesPath, file));
-    return frame.toString();
-  }));
-  flipped = original.map(f => {
-    return f
-      .toString()
-      .split('')
-      .reverse()
-      .join('')
-  })
+  original = await Promise.all(
+    files.map(async (file) => {
+      const frame = await fs.readFile(path.join(framesPath, file));
+      return frame.toString();
+    })
+  );
+  flipped = original.map((f) => {
+    return f.toString().split('').reverse().join('');
+  });
 })().catch((err) => {
   console.log('Error loading frames');
   console.log(err);
@@ -40,9 +38,9 @@ let flipped;
 ];*/
 //const numColors = colorsOptions.length;
 //const selectColor = previousColor => {
-  //let color;
+//let color;
 
-  /*do {
+/*do {
     color = Math.floor(Math.random() * numColors);
   } while (color === previousColor);
 
@@ -57,24 +55,24 @@ const streamer = (stream, opts) => {
 
   return setInterval(() => {
     // clear the screen
-    stream.push('\033[2J\033[3J\033[H');
+    stream.push('\x1b[2J\x1b[3J\x1b[H'); // WORKS!11!
 
     //const newColor = lastColor = selectColor(lastColor);
 
-    stream.push((frames[index]));
+    stream.push(frames[index]);
 
     index = (index + 1) % frames.length;
   }, 100);
 };
 
 const validateQuery = ({ flip }) => ({
-  flip: String(flip).toLowerCase() === 'true'
+  flip: String(flip).toLowerCase() === 'true',
 });
 
 const server = http.createServer((req, res) => {
   if (req.url === '/healthcheck') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    return res.end(JSON.stringify({status: 'ok'}));
+    return res.end(JSON.stringify({ status: 'ok' }));
   }
 
   if (
@@ -82,14 +80,19 @@ const server = http.createServer((req, res) => {
     req.headers['user-agent'] &&
     !req.headers['user-agent'].includes('curl')
   ) {
-    res.writeHead(302, { Location: 'https://github.com/PatoFlamejanteTV/duck.live' });
+    res.writeHead(302, {
+      Location: 'https://github.com/PatoFlamejanteTV/duck.live',
+    });
     return res.end();
   }
 
   const stream = new Readable();
   stream._read = function noop() {};
   stream.pipe(res);
-  const interval = streamer(stream, validateQuery(url.parse(req.url, true).query));
+  const interval = streamer(
+    stream,
+    validateQuery(url.parse(req.url, true).query)
+  );
 
   req.on('close', () => {
     stream.destroy();
@@ -98,7 +101,7 @@ const server = http.createServer((req, res) => {
 });
 
 const port = process.env.PARROT_PORT || 3000;
-server.listen(port, err => {
+server.listen(port, (err) => {
   if (err) throw err;
   console.log(`Listening on localhost:${port}`);
 });
